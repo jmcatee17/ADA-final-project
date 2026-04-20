@@ -1,0 +1,24 @@
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# IPython history
+profile_default/
+ipython_config.py
+
+# Colab and temporary notebook files
+.ipynb_checkpoints
+.virtual_documents/
+
+# Large data files (standard practice)
+*.csv
+*.json
+*.xlsx
+*.h5
+*.pickle
+
+# Python environment & cache
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
