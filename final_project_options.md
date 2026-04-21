@@ -7,7 +7,6 @@ I am interested in how the federal government spends its money on technology. US
 - Pull 5 years of transactions data from the usa spending api across all departments, agencies, and NAICS codes. I plan to access these API's using pythons requests library.
 - Create a ground truth table of historical spending in a baseline table. Ideate on exactly where this data will live and implement (i.e. csv versus Database).
 - Create a binary column (overspend) if a contract will cost more than the original base award (total award amount > base award amount).
-- Aggregate number of proposals / offers received for each contract.
 - Modification (what is the probability that contract will be modified within first year)
     - Create a binary column (1/0) for if modified within 365 days
     - Way to measure scope creep
@@ -20,7 +19,7 @@ I am interested in how the federal government spends its money on technology. US
     - This would go into different technology towers (Zero Trust, Generative AI, Quantum Computing, Graph Computing, etc.)
 - I will also create a model to identifying relationships between certain keywords and concepts in the contracts and administrations.
 - Train a model and Predict if contract will cost more than the original base award
-- Train a model and Predict level of competition with regression model (i.e. number of offers received) based on structure and RFI of contract
+- Train a model and predict total amount of spend. The award amount will be a predictor variable. Compare results with binary prediction.
 - Predict Modification likelihood within first 365 days
 - Create a dashboard that allows the user to see largest contracts, incumbent, and if they are expected to win the follow on,
 - Allow for user to filter for different contracts, incumbents, performance periods, PSC codes, etc.
