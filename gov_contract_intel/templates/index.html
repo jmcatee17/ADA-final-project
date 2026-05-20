@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GovCon Intel AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .filter-bar-status { font-size: 0.8rem; min-height: 1.2em; }
+        .sub-select { transition: opacity 0.2s; }
+    </style>
+</head>
+<body class="bg-light">
+
+<div id="loading" class="spinner-border text-primary position-fixed top-50 start-50 translate-middle" style="z-index: 1050; display: none;"></div>
+
+<div class="hero text-center">
+    <h1>Government Contracting Intelligence Tool</h1>
+    <p>Predictive Analytics &amp; Market Landscape</p>
+</div>
+
+<div class="container-fluid mt-4 px-5">
+
+    <!-- Dashboard filter bar -->
+    <div class="card p-3 mb-3">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Target Agency</label>
+                <select id="agency" class="form-select" onchange="updateDashboard()">
+                    <option>Department of Homeland Security</option>
+                    <option>Department of Defense</option>
+                    <option>Department of Health and Human Services</option>
+                    <option>Department of Veterans Affairs</option>
+                    <option>Department of Energy</option>
+                    <option>Department of Justice</option>
+                    <option>Department of Transportation</option>
+                    <option>General Services Administration</option>
+                    <option>National Aeronautics and Space Administration</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Start Date</label>
+                <input type="date" id="start" class="form-control" value="2023-10-01" onchange="updateDashboard()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">End Date</label>
+                <input type="date" id="end" class="form-control" value="2024-09-30" onchange="updateDashboard()">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Keyword / NAICS</label>
+                <input type="text" id="naics" class="form-control" placeholder="Optional..." onkeypress="if(event.key === 'Enter') updateDashboard()">
+            </div>
+            <div class="col-md-2">
+                <button id="syncBtn" class="btn btn-primary w-100" onclick="updateDashboard()">Sync &amp; Analyze</button>
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-12">
+                <div id="filterStatus" class="filter-bar-status text-muted ps-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts row 1 -->
+    <div class="row">
+        <div class="col-md-8"><div class="card p-2"><div id="pscChart"></div></div></div>
+        <div class="col-md-4"><div class="card p-2"><div id="distChart"></div></div></div>
+    </div>
+
+    <!-- Charts row 2 -->
+    <div class="row">
+        <div class="col-md-6"><div class="card p-2"><div id="contractorChart"></div></div></div>
+        <div class="col-md-6"><div class="card p-2"><div id="timeChart"></div></div></div>
+    </div>
+
+    <!-- Predictors row -->
+    <div class="row mt-4 mb-5">
+
+        <!-- Award Value Predictor -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white fw-bold">Award Value Predictor</div>
+                <div class="card-body">
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Awarding Agency</label>
+                        <select id="f_award_agency" class="form-select form-select-sm" onchange="syncSubAgencies('award')">
+                            <!-- populated by JS -->
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Awarding Sub Agency</label>
+                        <select id="f_award_sub" class="form-select form-select-sm sub-select">
+                            <!-- populated by JS based on parent -->
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Funding Agency</label>
+                        <select id="f_fund_agency" class="form-select form-select-sm" onchange="syncSubAgencies('fund')">
+                            <!-- populated by JS -->
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Funding Sub Agency</label>
+                        <select id="f_fund_sub" class="form-select form-select-sm sub-select">
+                            <!-- populated by JS based on parent -->
+                        </select>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Country</label>
+                            <select id="f_country" class="form-select form-select-sm">
+                                <option value="USA">USA</option>
+                                <option value="DEU">Germany</option>
+                                <option value="JPN">Japan</option>
+                                <option value="GBR">United Kingdom</option>
+                                <option value="KOR">South Korea</option>
+                                <option value="ITA">Italy</option>
+                                <option value="AUS">Australia</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">State</label>
+                            <select id="f_state" class="form-select form-select-sm">
+                                <option value="DC">DC</option><option value="VA">VA</option>
+                                <option value="MD">MD</option><option value="TX">TX</option>
+                                <option value="CA">CA</option><option value="FL">FL</option>
+                                <option value="GA">GA</option><option value="AL">AL</option>
+                                <option value="MS">MS</option><option value="CT">CT</option>
+                                <option value="WA">WA</option><option value="OH">OH</option>
+                                <option value="PA">PA</option><option value="NY">NY</option>
+                                <option value="NC">NC</option><option value="SC">SC</option>
+                                <option value="AZ">AZ</option><option value="CO">CO</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">NAICS Code</label>
+                            <select id="f_naics" class="form-select form-select-sm">
+                                <option value="541512">541512 – Computer Systems Design</option>
+                                <option value="541511">541511 – Custom Computer Programming</option>
+                                <option value="541519">541519 – Other Computer Related Svcs</option>
+                                <option value="541330">541330 – Engineering Services</option>
+                                <option value="541611">541611 – Management Consulting</option>
+                                <option value="561210">561210 – Facilities Support</option>
+                                <option value="336411">336411 – Aircraft Manufacturing</option>
+                                <option value="332994">332994 – Small Arms Manufacturing</option>
+                                <option value="561320">561320 – Temporary Staffing</option>
+                                <option value="518210">518210 – Data Processing Services</option>
+                                <option value="621111">621111 – Physicians/Surgeons</option>
+                                <option value="237310">237310 – Highway/Street Construction</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Duration (Days)</label>
+                            <input type="number" id="f_duration" class="form-control form-control-sm" value="365" min="1">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Contract Description</label>
+                        <textarea id="f_desc" class="form-control form-control-sm" rows="3"
+                            placeholder="Describe the scope of work...">IT support and helpdesk services for agency operations</textarea>
+                    </div>
+
+                    <button id="predictBtn" type="button" class="btn btn-success w-100 fw-bold" onclick="runInference()">
+                        Run Prediction Model
+                    </button>
+
+                    <div id="res" class="mt-3 d-none">
+                        <hr>
+                        <div class="text-center">
+                            <div class="text-muted small mb-1">Estimated Award Value</div>
+                            <h3 id="resAmt" class="text-primary fw-bold mb-2"></h3>
+                            <div class="text-muted small mb-1">Modification Risk</div>
+                            <h5 id="resRisk" class="fw-bold"></h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risk batch chart -->
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header bg-dark text-white fw-bold">Modification Risk Batch Analysis</div>
+                <div class="card-body"><div id="riskBar" style="height:430px;"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Agency → Sub-Agency map (drives both dashboard context and predictor form)
+// ---------------------------------------------------------------------------
+const SUB_AGENCIES = {
+    "Department of Homeland Security": [
+        "U.S. Customs and Border Protection",
+        "Transportation Security Administration",
+        "Federal Emergency Management Agency",
+        "Immigration and Customs Enforcement",
+        "U.S. Coast Guard",
+        "U.S. Secret Service",
+        "Cybersecurity and Infrastructure Security Agency",
+        "Science and Technology Directorate"
+    ],
+    "Department of Defense": [
+        "Department of the Army",
+        "Department of the Navy",
+        "Department of the Air Force",
+        "Defense Logistics Agency",
+        "Defense Health Agency",
+        "Defense Advanced Research Projects Agency",
+        "Missile Defense Agency",
+        "Defense Information Systems Agency",
+        "Defense Contract Management Agency",
+        "U.S. Special Operations Command",
+        "National Geospatial-Intelligence Agency"
+    ],
+    "Department of Health and Human Services": [
+        "Centers for Disease Control and Prevention",
+        "Centers for Medicare and Medicaid Services",
+        "Food and Drug Administration",
+        "National Institutes of Health",
+        "Health Resources and Services Administration",
+        "Indian Health Service",
+        "Substance Abuse and Mental Health Services Administration",
+        "Office of the Assistant Secretary for Preparedness and Response"
+    ],
+    "Department of Veterans Affairs": [
+        "Veterans Health Administration",
+        "Veterans Benefits Administration",
+        "National Cemetery Administration",
+        "Office of Information and Technology"
+    ],
+    "Department of Energy": [
+        "National Nuclear Security Administration",
+        "Office of Environmental Management",
+        "Office of Science",
+        "Energy Information Administration",
+        "Office of Electricity"
+    ],
+    "Department of Justice": [
+        "Federal Bureau of Investigation",
+        "Drug Enforcement Administration",
+        "Bureau of Prisons",
+        "Bureau of Alcohol, Tobacco, Firearms and Explosives",
+        "U.S. Marshals Service",
+        "Executive Office for Immigration Review"
+    ],
+    "Department of Transportation": [
+        "Federal Aviation Administration",
+        "Federal Highway Administration",
+        "Federal Railroad Administration",
+        "Federal Transit Administration",
+        "National Highway Traffic Safety Administration",
+        "Pipeline and Hazardous Materials Safety Administration"
+    ],
+    "General Services Administration": [
+        "Federal Acquisition Service",
+        "Public Buildings Service",
+        "Office of Government-wide Policy",
+        "Technology Transformation Services"
+    ],
+    "National Aeronautics and Space Administration": [
+        "NASA Headquarters",
+        "Goddard Space Flight Center",
+        "Johnson Space Center",
+        "Kennedy Space Center",
+        "Marshall Space Flight Center",
+        "Jet Propulsion Laboratory",
+        "Langley Research Center",
+        "Ames Research Center"
+    ]
+};
+
+const ALL_AGENCIES = Object.keys(SUB_AGENCIES);
+
+// Populate an <select> element with an array of string options
+function fillSelect(selectId, options, selected) {
+    const el = document.getElementById(selectId);
+    el.innerHTML = options.map(o =>
+        `<option value="${o}"${o === selected ? ' selected' : ''}>${o}</option>`
+    ).join('');
+}
+
+// Populate parent agency dropdowns
+function initAgencyDropdowns() {
+    fillSelect('f_award_agency', ALL_AGENCIES, ALL_AGENCIES[0]);
+    fillSelect('f_fund_agency',  ALL_AGENCIES, ALL_AGENCIES[0]);
+    syncSubAgencies('award');
+    syncSubAgencies('fund');
+}
+
+// Re-populate the sub-agency dropdown whenever the parent agency changes
+function syncSubAgencies(type) {
+    const parentId = type === 'award' ? 'f_award_agency' : 'f_fund_agency';
+    const childId  = type === 'award' ? 'f_award_sub'    : 'f_fund_sub';
+    const parent   = document.getElementById(parentId).value;
+    const subs     = SUB_AGENCIES[parent] || ["Other"];
+    fillSelect(childId, subs, subs[0]);
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
+let dashboardInFlight = false;
+
+async function updateDashboard() {
+    if (dashboardInFlight) return;
+    dashboardInFlight = true;
+
+    const btn    = document.getElementById('syncBtn');
+    const status = document.getElementById('filterStatus');
+    const agency = document.getElementById('agency').value;
+    const start  = document.getElementById('start').value;
+    const end    = document.getElementById('end').value;
+
+    btn.disabled    = true;
+    btn.innerText   = 'Loading…';
+    status.innerHTML = `<span class="text-warning">⏳ Fetching contracts for <strong>${agency}</strong> from ${start} to ${end}…</span>`;
+    document.getElementById('loading').style.display = 'block';
+
+    const payload = {
+        agencies:   [agency],
+        start_date: start,
+        end_date:   end,
+        naics:      document.getElementById('naics').value
+    };
+
+    try {
+        const res  = await fetch('/api/market-data', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            status.innerHTML = `<span class="text-danger">⚠️ ${data.error}</span>`;
+            return;
+        }
+
+        Plotly.react('pscChart',        data.psc_chart.data,        data.psc_chart.layout);
+        Plotly.react('contractorChart', data.contractor_chart.data, data.contractor_chart.layout);
+        Plotly.react('distChart',       data.dist_chart.data,       data.dist_chart.layout);
+        Plotly.react('timeChart',       data.time_chart.data,       data.time_chart.layout);
+
+        const ts = new Date().toLocaleTimeString();
+        status.innerHTML = `<span class="text-success">✓ Data refreshed for <strong>${agency}</strong> &nbsp;·&nbsp; ${start} → ${end} &nbsp;·&nbsp; Last updated: ${ts}</span>`;
+
+        loadRisk();
+    } catch(e) {
+        status.innerHTML = `<span class="text-danger">⚠️ Network error: ${e}</span>`;
+    } finally {
+        btn.disabled  = false;
+        btn.innerText = 'Sync & Analyze';
+        document.getElementById('loading').style.display = 'none';
+        dashboardInFlight = false;
+    }
+}
+
+async function loadRisk() {
+    const res  = await fetch('/api/predict-mod-risk', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.risk_bar) Plotly.react('riskBar', data.risk_bar.data, data.risk_bar.layout);
+}
+
+// ---------------------------------------------------------------------------
+// Award Value Predictor
+// ---------------------------------------------------------------------------
+async function runInference() {
+    const btn = document.getElementById('predictBtn');
+    btn.disabled  = true;
+    btn.innerText = 'Running…';
+
+    const payload = {
+        'Awarding Agency':                      document.getElementById('f_award_agency').value,
+        'Awarding Sub Agency':                  document.getElementById('f_award_sub').value,
+        'Funding Agency':                       document.getElementById('f_fund_agency').value,
+        'Funding Sub Agency':                   document.getElementById('f_fund_sub').value,
+        'Place of Performance Country Code':    document.getElementById('f_country').value,
+        'Place of Performance State Code':      document.getElementById('f_state').value,
+        'naics_code':                           document.getElementById('f_naics').value,
+        'duration':                             document.getElementById('f_duration').value,
+        'Description':                          document.getElementById('f_desc').value,
+    };
+
+    try {
+        const res  = await fetch('/api/predict-amount', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.error) { alert('Prediction error: ' + data.error); return; }
+
+        document.getElementById('res').classList.remove('d-none');
+        document.getElementById('resAmt').innerText =
+            '$' + parseFloat(data.amount).toLocaleString('en-US', {maximumFractionDigits: 0});
+        
+        // 1. Set the text label
+        document.getElementById('resRisk').innerText = data.risk_label + ' Risk';
+        
+        // 2. Define the color mapping lookup object
+        const riskColors = {
+            'Very High': 'text-danger',   // Red
+            'High':      'text-warning',  // Orange/Amber
+            'Medium':    'text-info',     // Cyan/Yellow-adjacent
+            'Low':       'text-success'   // Green
+        };
+
+        // 3. Get the matching class, defaulting to secondary gray if not found
+        const colorClass = riskColors[data.risk_label] || 'text-secondary';
+
+        // 4. Update the element's className safely
+        document.getElementById('resRisk').className = 'fw-bold ' + colorClass;
+
+    } catch(e) {
+        alert('Prediction failed: ' + e);
+    } finally {
+        btn.disabled  = false;
+        btn.innerText = 'Run Prediction Model';
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+window.onload = function() {
+    initAgencyDropdowns();
+    updateDashboard();
+};
+</script>
+</body>
+</html>
