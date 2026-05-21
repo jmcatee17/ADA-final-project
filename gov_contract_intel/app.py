@@ -1,6 +1,7 @@
 import os
 import json
 
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -12,7 +13,7 @@ from utils.inference import ContractInference
 
 app = Flask(__name__)
 
-BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
 CACHE_PATH = os.path.join(BASE_DIR, "data", "contracts_cache.csv")
 
 MODEL_PATHS = {
@@ -31,24 +32,11 @@ predictor = ContractInference(
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _extract_field(val, key="name"):
-    """
-    USASpending returns some fields as nested dicts, e.g.:
-      PSC          → {'code': 'S206', 'description': 'HOUSEKEEPING- GUARD'}
-      Agency fields→ {'id': 123, 'name': 'Dept of Defense', ...}
-    This safely pulls out the requested key, or str(val) as fallback.
-    """
-    if isinstance(val, dict):
-        return val.get(key) or val.get("name") or val.get("code") or str(val)
-    return val
-
-
 def _flatten_api_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
     Flatten every column that the USASpending API may return as a nested dict.
-    Keeps a separate *_description column for PSC hover tooltips.
+    Keeps a separate PSC_description column for hover tooltips.
     """
-    # PSC: keep code as the display value, store description for hover
     if "PSC" in df.columns:
         df["PSC_description"] = df["PSC"].apply(
             lambda x: x.get("description", "") if isinstance(x, dict) else ""
@@ -57,14 +45,12 @@ def _flatten_api_columns(df: pd.DataFrame) -> pd.DataFrame:
             lambda x: x.get("code", "UNKNOWN") if isinstance(x, dict) else str(x)
         )
 
-    # Agency / sub-agency columns
     for col in ("Awarding Agency", "Awarding Sub Agency", "Funding Agency", "Funding Sub Agency"):
         if col in df.columns:
             df[col] = df[col].apply(
                 lambda x: x.get("name", "UNKNOWN") if isinstance(x, dict) else x
             )
 
-    # Recipient Name
     if "Recipient Name" in df.columns:
         df["Recipient Name"] = df["Recipient Name"].apply(
             lambda x: x.get("name", "UNKNOWN") if isinstance(x, dict) else x
@@ -88,48 +74,70 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return df
 
-    # Flatten nested dict columns FIRST
+    # Flatten nested dict columns first
     df = _flatten_api_columns(df)
 
-    # Award Amount
     if "Award Amount" in df.columns:
         df["Award Amount"] = _to_numeric_amount(df["Award Amount"])
     else:
         df["Award Amount"] = 0.0
 
-    # PSC nulls
     if "PSC" in df.columns:
         df["PSC"] = (
             df["PSC"].fillna("UNKNOWN").astype(str).str.strip()
             .replace({"": "UNKNOWN", "nan": "UNKNOWN", "None": "UNKNOWN"})
         )
 
-    # Recipient Name nulls
+    if "PSC_description" not in df.columns:
+        df["PSC_description"] = ""
+
     if "Recipient Name" in df.columns:
         df["Recipient Name"] = df["Recipient Name"].fillna("UNKNOWN").astype(str).str.strip()
 
-    # Dates
     df["Start Date"] = pd.to_datetime(df["Start Date"], errors="coerce")
     df = df.dropna(subset=["Start Date"])
     return df
+
+
+def _load_and_prepare_cache() -> pd.DataFrame:
+    """Read cache CSV and ensure key columns are correctly typed."""
+    df = pd.read_csv(CACHE_PATH)
+    df["Start Date"] = pd.to_datetime(df["Start Date"], errors="coerce")
+    if "Award Amount" in df.columns:
+        df["Award Amount"] = _to_numeric_amount(df["Award Amount"])
+    if "PSC_description" not in df.columns:
+        df["PSC_description"] = ""
+    if "PSC" not in df.columns:
+        df["PSC"] = "UNKNOWN"
+    return df
+
+
+def _append_to_cache(new_df: pd.DataFrame) -> None:
+    """Deduplicate on Award ID and persist to cache CSV."""
+    os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
+    if os.path.exists(CACHE_PATH):
+        try:
+            existing = pd.read_csv(CACHE_PATH)
+            combined = pd.concat([existing, new_df], ignore_index=True)
+            if "Award ID" in combined.columns:
+                combined = combined.drop_duplicates(subset=["Award ID"], keep="last")
+            combined.to_csv(CACHE_PATH, index=False)
+        except Exception as e:
+            print(f"Cache append error: {e}")
+            new_df.to_csv(CACHE_PATH, index=False)
+    else:
+        new_df.to_csv(CACHE_PATH, index=False)
 
 
 def _empty_fig(title: str):
     fig = go.Figure()
     fig.update_layout(
         title=title,
-        annotations=[dict(text="No data available", showarrow=False,
-                          xref="paper", yref="paper", x=0.5, y=0.5,
-                          font=dict(size=16))],
-    )
-    return fig
-
-
-def _dollar_axis(fig):
-    """Apply $X.XM / $X.XB tick formatting to the x-axis."""
-    fig.update_layout(
-        xaxis_tickprefix="$",
-        xaxis_tickformat=",.2s",   # e.g. 1.2B, 450M
+        annotations=[dict(
+            text="No data available", showarrow=False,
+            xref="paper", yref="paper", x=0.5, y=0.5,
+            font=dict(size=16),
+        )],
     )
     return fig
 
@@ -145,40 +153,81 @@ def index():
 
 @app.route("/api/market-data", methods=["POST"])
 def market_data():
-    filters        = request.json or {}
+    filters         = request.json or {}
     target_agencies = filters.get("agencies", ["Department of Homeland Security"])
-    start_date     = filters.get("start_date", "2023-10-01")
-    end_date       = filters.get("end_date",   "2024-09-30")
+    start_date      = filters.get("start_date", "2023-10-01")
+    # Default end date is today so the UI always reflects the current date
+    end_date        = filters.get("end_date", pd.Timestamp.now().strftime("%Y-%m-%d"))
+    naics_filter    = filters.get("naics", "").strip()
 
-    df = usa_api.scrape_contracts(start_date, end_date, target_agencies)
-    df = clean_data(df)
+    start_dt = pd.Timestamp(start_date)
+    end_dt   = pd.Timestamp(end_date)
+
+    # ------------------------------------------------------------------
+    # 1. Cache-first: return cached rows if we already have them
+    # ------------------------------------------------------------------
+    df         = pd.DataFrame()
+    from_cache = False
+
+    if os.path.exists(CACHE_PATH):
+        try:
+            cached = _load_and_prepare_cache()
+            cached = cached.dropna(subset=["Start Date"])
+
+            date_mask = (cached["Start Date"] >= start_dt) & (cached["Start Date"] <= end_dt)
+
+            if "Awarding Agency" in cached.columns:
+                agency_mask = cached["Awarding Agency"].isin(target_agencies)
+                hit = cached[date_mask & agency_mask]
+            else:
+                hit = cached[date_mask]
+
+            if not hit.empty:
+                df         = hit.copy()
+                from_cache = True
+
+        except Exception as e:
+            print(f"Cache read error: {e}")
+
+    # ------------------------------------------------------------------
+    # 2. Fetch from API only on cache miss; persist new rows
+    # ------------------------------------------------------------------
+    if df.empty:
+        raw = usa_api.scrape_contracts(start_date, end_date, target_agencies)
+        df  = clean_data(raw)
+
+        if not df.empty:
+            mask = (df["Start Date"] >= start_dt) & (df["Start Date"] <= end_dt)
+            df   = df[mask]
+            if not df.empty:
+                _append_to_cache(df)
 
     if df.empty:
         return jsonify({"error": "No data returned for this selection."}), 404
 
-    # Filter strictly to the requested date window (avoids stale cache bleed)
-    mask = (df["Start Date"] >= start_date) & (df["Start Date"] <= end_date)
-    df   = df[mask]
-    if df.empty:
-        return jsonify({"error": "No data in selected date range."}), 404
+    # Re-parse after potential CSV round-trip
+    # df["Start Date"]  = pd.to_datetime(df["Start Date"], errors="coerce")
+    # df                = df.dropna(subset=["Start Date"])
+    df["Award Amount"] = _to_numeric_amount(df["Award Amount"]) if "Award Amount" in df.columns else 0.0
 
-    os.makedirs(os.path.dirname(CACHE_PATH), exist_ok=True)
-    if os.path.exists(CACHE_PATH):
-        existing = pd.read_csv(CACHE_PATH)
-        combined = pd.concat([existing, df], ignore_index=True)
-        if "Award ID" in combined.columns:
-            combined = combined.drop_duplicates(subset=["Award ID"], keep="last")
-        df = combined
-    df.to_csv(CACHE_PATH, index=False)
+    if "PSC_description" not in df.columns:
+        df["PSC_description"] = ""
+    if "PSC" not in df.columns:
+        df["PSC"] = "UNKNOWN"
 
-    # Re-parse after concat — CSV round-trip turns Timestamps back into strings
-    df["Start Date"] = pd.to_datetime(df["Start Date"], errors="coerce")
-    df = df.dropna(subset=["Start Date"])
+    # Optional keyword / NAICS filter (applied after cache hit too)
+    if naics_filter:
+        for col in ("PSC", "naics_code", "Description"):
+            if col in df.columns:
+                m = df[col].astype(str).str.contains(naics_filter, case=False, na=False)
+                if m.any():
+                    df = df[m]
+                    break
 
     # ------------------------------------------------------------------
-    # Chart 1 — PSC activity (code label + description on hover)
+    # Chart 1 — PSC activity (count per code, hover shows description)
     # ------------------------------------------------------------------
-    psc_df = df[df["PSC"] != "UNKNOWN"].copy() if (df["PSC"] != "UNKNOWN").any() else df.copy()
+    psc_df = df
 
     psc_hover = (
         psc_df.groupby("PSC")
@@ -186,7 +235,6 @@ def market_data():
         .reset_index()
         .sort_values("Count", ascending=False)
         .head(15)
-        .sort_values("Count")           # ascending for horizontal bar
     )
 
     if psc_hover.empty:
@@ -201,7 +249,7 @@ def market_data():
         fig_psc.update_layout(yaxis=dict(type="category"))
 
     # ------------------------------------------------------------------
-    # Chart 2 — Top 10 contractors by dollar spend
+    # Chart 2 — Top 10 contractors by total dollar spend
     # ------------------------------------------------------------------
     top_con = (
         df[df["Award Amount"] > 0]
@@ -210,7 +258,6 @@ def market_data():
         .sort_values("Award Amount")
         .tail(10)
     )
-
     if top_con.empty:
         fig_contractor = _empty_fig("Top 10 Contractors by Total Spend ($)")
     else:
@@ -220,38 +267,53 @@ def market_data():
             title="Top 10 Contractors by Total Spend ($)",
             labels={"Award Amount": "Total Award ($)"},
         )
+        fig_contractor.update_traces(
+            hovertemplate="<b>%{y}</b><br>Total Spend: $%{x:,.0f}<extra></extra>"
+        )
         fig_contractor.update_layout(
             yaxis=dict(type="category"),
             xaxis_tickprefix="$",
-            xaxis_tickformat=",.2s",
+            xaxis_tickformat=",",
+            xaxis_exponentformat="none"
         )
 
     # ------------------------------------------------------------------
-    # Chart 3 — Award value distribution (histogram handles sparse data)
+    # Chart 3 — Award value distribution
+    # Bins are pre-computed in Python with np.histogram so Plotly.js
+    # receives a plain bar trace — avoids histogram binning/rendering
+    # quirks when the figure is serialised to JSON and re-hydrated.
     # ------------------------------------------------------------------
     dist_df = df[df["Award Amount"] > 0].copy()
 
     if dist_df.empty:
         fig_dist = _empty_fig("Award Value Distribution")
     else:
-        fig_dist = px.histogram(
-            dist_df,
-            x="Award Amount",
-            nbins=30,
-            log_x=True,
-            title="Award Value Distribution",
-            labels={"Award Amount": "Award Amount ($)"},
-        )
+        log_vals   = np.log10(dist_df["Award Amount"].clip(lower=1))
+        bin_edges  = [0, 3, 4, 5, 6, 7, 8, 9, 10]
+        bin_labels = ["<$1K", "$1K–$10K", "$10K–$100K", "$100K–$1M",
+                      "$1M–$10M", "$10M–$100M", "$100M–$1B", ">$1B"]
+        counts, _  = np.histogram(log_vals, bins=bin_edges)
+        fig_dist   = go.Figure(go.Bar(
+            x=bin_labels,
+            y=counts.tolist(),
+            marker_color="#636efa",
+            hovertemplate="<b>%{x}</b><br># Contracts: %{y}<extra></extra>",
+        ))
         fig_dist.update_layout(
-            xaxis_tickprefix="$",
-            xaxis_tickformat=",.2s",
+            title="Award Value Distribution",
+            xaxis_title="Award Amount ($)",
+            yaxis_title="# Contracts",
+            bargap=0.15,
         )
 
     # ------------------------------------------------------------------
-    # Chart 4 — Monthly spending trend (scoped to selected date window)
+    # Chart 4 — Monthly spending trend
+    # Filter to positive amounts before resampling so $0-valued rows
+    # don't pollute the monthly totals.
     # ------------------------------------------------------------------
     df_time = (
-        df.set_index("Start Date")
+        df[df["Award Amount"] > 0]
+        .set_index("Start Date")
         .resample("ME")["Award Amount"]
         .sum()
         .reset_index()
@@ -264,21 +326,23 @@ def market_data():
             df_time, x="Start Date", y="Award Amount",
             title="Monthly Spending Trend",
             labels={"Award Amount": "Total Spend ($)", "Start Date": "Month"},
+            markers=True,
+        )
+        fig_time.update_traces(
+            hovertemplate="<b>%{x|%b %Y}</b><br>Spend: $%{y:,.0f}<extra></extra>"
         )
         fig_time.update_layout(
             yaxis_tickprefix="$",
             yaxis_tickformat=",.2s",
         )
 
-    return json.dumps(
-        {
-            "psc_chart":        fig_psc,
-            "contractor_chart": fig_contractor,
-            "dist_chart":       fig_dist,
-            "time_chart":       fig_time,
-        },
-        cls=plotly.utils.PlotlyJSONEncoder,
-    )
+    return jsonify({
+        "psc_chart":        json.loads(fig_psc.to_json()),
+        "contractor_chart": json.loads(fig_contractor.to_json()),
+        "dist_chart":       json.loads(fig_dist.to_json()),
+        "time_chart":       json.loads(fig_time.to_json()),
+        "from_cache":       from_cache,
+    })
 
 
 @app.route("/api/predict-amount", methods=["POST"])
@@ -293,52 +357,71 @@ def predict_mod_risk():
     if not os.path.exists(CACHE_PATH):
         return jsonify({"error": "No cached data. Click 'Sync & Analyze' first."}), 400
 
-    df_c = pd.read_csv(CACHE_PATH)
-    df_c["Start Date"] = pd.to_datetime(df_c["Start Date"])
+    try:
+        df_c = _load_and_prepare_cache()
+    except Exception as e:
+        return jsonify({"error": f"Cache read failed: {e}"}), 500
+
+    df_c = df_c.dropna(subset=["Start Date"])
+
+    current_date = pd.Timestamp.now().floor("D")
+    one_year     = pd.Timedelta(days=365)
     
-    # Get the current dynamic timestamp normalized to midnight
-    current_date = pd.Timestamp.now().floor('D') 
-    one_year = pd.Timedelta(days=365)
-    
-    # FIX: Added missing closing parenthesis/bracket for the conditional mask
-    df_filter = df_c[(df_c["Start Date"] >= current_date - one_year)]
-        
-    df = df_filter.head(20)
+    # 1. Grab ALL recent data, without .head(20)
+    df = df_c[df_c["Start Date"] >= current_date - one_year].copy()
 
-    if "Award Amount" in df.columns:
-        df["Award Amount"] = _to_numeric_amount(df["Award Amount"])
+    if df.empty:
+        return jsonify({"error": "Not enough recent data in cache."}), 400
 
-    processed        = predictor.engineer.prepare_for_inference(df)
-    df["risk_score"] = predictor.risk_model.predict_proba(processed)[:, 1]
+    # 2. Run predictions on the full dataset
+    processed = predictor.engineer.prepare_for_inference(df)
+    try:
+        raw_scores = predictor.risk_model.predict_proba(processed)[:, 1]
+    except AttributeError:
+        # Fallback if model is a regressor without predict_proba
+        raw_scores = predictor.risk_model.predict(processed)
+    df["risk_score"] = np.clip(raw_scores, 0.0, 1.0)
 
-    df["Award ID"] = (
-        df["Award ID"].fillna("Unknown").astype(str)
-        if "Award ID" in df.columns
-        else pd.Series([f"Contract {i}" for i in range(len(df))])
-    )
+    if "Award ID" not in df.columns:
+        df["Award ID"] = [f"Contract {i}" for i in range(len(df))]
+    else:
+        df["Award ID"] = df["Award ID"].fillna("Unknown").astype(str)
 
-    # Create a quick, truncated version of the description for the hover text
-    df["Short Description"] = df["Description"].str[:30] + "..."
-    
-    fig_risk = px.bar(
-        df.sort_values("risk_score"),
-        x="risk_score", 
-        y="Award ID", 
+    df["Short Description"] = df["Description"].fillna("").str[:40] + "..."
+
+    # 3. Sort by highest risk FIRST, then take the top 20
+    df_sorted = df.sort_values("risk_score", ascending=False).head(20).reset_index(drop=True)
+    risk_vals  = df_sorted["risk_score"].values
+    desc_vals  = df_sorted["Short Description"].values
+
+    # Use go.Bar directly so we control the hovertemplate precisely.
+    # px.bar with color=x causes Plotly to emit %{marker.color} in the
+    # template, which never formats correctly.
+    fig_risk = go.Figure(go.Bar(
+        x=risk_vals,
+        y=df_sorted["Award ID"].values,
         orientation="h",
-        color="risk_score", 
-        color_continuous_scale="Reds",
+        marker=dict(
+            color=risk_vals,
+            colorscale="RdYlGn_r",
+            cmin=0,
+            cmax=1,
+            showscale=True,
+            colorbar=dict(title="Risk", tickformat=".0%"),
+        ),
+        customdata=list(zip(desc_vals)),
+        hovertemplate=(
+            "<b>%{y}</b><br>"
+            "Risk Probability: %{x:.1%}<br>"
+            "Desc: %{customdata[0]}"
+            "<extra></extra>"
+        ),
+    ))
+    fig_risk.update_layout(
         title="Modification Risk Forecast",
-        labels={
-            "risk_score": "Risk Probability",
-            "Short Description": "Description"  # Renames the hover label cleanly
-        },
-        hover_data={
-            "risk_score": ":.2f",
-            "Award ID": True,
-            "Short Description": True  # Pulls the 20-character version into the hover
-        }
+        xaxis=dict(title="Risk Probability", range=[0, 1], tickformat=".0%"),
+        yaxis=dict(type="category"),
     )
-    fig_risk.update_layout(xaxis_range=[0, 1], yaxis=dict(type="category"))
 
     return json.dumps({"risk_bar": fig_risk}, cls=plotly.utils.PlotlyJSONEncoder)
 

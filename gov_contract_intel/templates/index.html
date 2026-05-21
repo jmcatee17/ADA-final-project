@@ -4,7 +4,7 @@
     <title>GovCon Intel AI</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     <style>
         .filter-bar-status { font-size: 0.8rem; min-height: 1.2em; }
         .sub-select { transition: opacity 0.2s; }
@@ -27,15 +27,19 @@
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Target Agency</label>
                 <select id="agency" class="form-select" onchange="updateDashboard()">
-                    <option>Department of Homeland Security</option>
+                    <option>Commodity Futures Trading Commission</option>
+                    <option>Department of Agriculture</option>
+                    <option>Department of Commerce</option>
                     <option>Department of Defense</option>
-                    <option>Department of Health and Human Services</option>
-                    <option>Department of Veterans Affairs</option>
                     <option>Department of Energy</option>
+                    <option>Department of Health and Human Services</option>
+                    <option>Department of Homeland Security</option>
                     <option>Department of Justice</option>
+                    <option>Department of State</option>
                     <option>Department of Transportation</option>
-                    <option>General Services Administration</option>
-                    <option>National Aeronautics and Space Administration</option>
+                    <option>Department of the Interior</option>
+                    <option>Department of the Treasury</option>
+                    <option>Securities and Exchange Commission</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -44,7 +48,8 @@
             </div>
             <div class="col-md-2">
                 <label class="form-label fw-semibold">End Date</label>
-                <input type="date" id="end" class="form-control" value="2024-09-30" onchange="updateDashboard()">
+                <!-- Value is set to today dynamically in window.onload -->
+                <input type="date" id="end" class="form-control" onchange="updateDashboard()">
             </div>
             <div class="col-md-3">
                 <label class="form-label fw-semibold">Keyword / NAICS</label>
@@ -126,40 +131,83 @@
                         <div class="col-6">
                             <label class="form-label fw-semibold">State</label>
                             <select id="f_state" class="form-select form-select-sm">
-                                <option value="DC">DC</option><option value="VA">VA</option>
-                                <option value="MD">MD</option><option value="TX">TX</option>
-                                <option value="CA">CA</option><option value="FL">FL</option>
-                                <option value="GA">GA</option><option value="AL">AL</option>
-                                <option value="MS">MS</option><option value="CT">CT</option>
-                                <option value="WA">WA</option><option value="OH">OH</option>
-                                <option value="PA">PA</option><option value="NY">NY</option>
-                                <option value="NC">NC</option><option value="SC">SC</option>
-                                <option value="AZ">AZ</option><option value="CO">CO</option>
+                                <option value="AK">AK</option>
+                                <option value="AL">AL</option>
+                                <option value="AR">AR</option>
+                                <option value="AZ">AZ</option>
+                                <option value="CA">CA</option>
+                                <option value="CO">CO</option>
+                                <option value="CT">CT</option>
+                                <option value="DC">DC</option>
+                                <option value="DE">DE</option>
+                                <option value="FL">FL</option>
+                                <option value="GA">GA</option>
+                                <option value="HI">HI</option>
+                                <option value="IA">IA</option>
+                                <option value="ID">ID</option>
+                                <option value="IL">IL</option>
+                                <option value="IN">IN</option>
+                                <option value="KS">KS</option>
+                                <option value="KY">KY</option>
+                                <option value="LA">LA</option>
+                                <option value="MA">MA</option>
+                                <option value="MD">MD</option>
+                                <option value="ME">ME</option>
+                                <option value="MI">MI</option>
+                                <option value="MN">MN</option>
+                                <option value="MO">MO</option>
+                                <option value="MS">MS</option>
+                                <option value="MT">MT</option>
+                                <option value="NC">NC</option>
+                                <option value="ND">ND</option>
+                                <option value="NE">NE</option>
+                                <option value="NH">NH</option>
+                                <option value="NJ">NJ</option>
+                                <option value="NM">NM</option>
+                                <option value="NV">NV</option>
+                                <option value="NY">NY</option>
+                                <option value="OH">OH</option>
+                                <option value="OK">OK</option>
+                                <option value="OR">OR</option>
+                                <option value="PA">PA</option>
+                                <option value="RI">RI</option>
+                                <option value="SC">SC</option>
+                                <option value="SD">SD</option>
+                                <option value="TN">TN</option>
+                                <option value="TX">TX</option>
+                                <option value="UT">UT</option>
+                                <option value="VA">VA</option>
+                                <option value="VT">VT</option>
+                                <option value="WA">WA</option>
+                                <option value="WI">WI</option>
+                                <option value="WV">WV</option>
+                                <option value="WY">WY</option>
                             </select>
                         </div>
                     </div>
 
+                    <!-- NAICS and Market Share on same row -->
                     <div class="row mb-2">
-                        <div class="col-6">
+                        <div class="col-7">
                             <label class="form-label fw-semibold">NAICS Code</label>
                             <select id="f_naics" class="form-select form-select-sm">
-                                <option value="541512">541512 – Computer Systems Design</option>
+                                <option value="518210">541512 – Computing Infrastructure Providers, Data Processing, Web Hosting, and Related Services</option>
                                 <option value="541511">541511 – Custom Computer Programming</option>
                                 <option value="541519">541519 – Other Computer Related Svcs</option>
-                                <option value="541330">541330 – Engineering Services</option>
-                                <option value="541611">541611 – Management Consulting</option>
-                                <option value="561210">561210 – Facilities Support</option>
-                                <option value="336411">336411 – Aircraft Manufacturing</option>
-                                <option value="332994">332994 – Small Arms Manufacturing</option>
-                                <option value="561320">561320 – Temporary Staffing</option>
-                                <option value="518210">518210 – Data Processing Services</option>
-                                <option value="621111">621111 – Physicians/Surgeons</option>
-                                <option value="237310">237310 – Highway/Street Construction</option>
+                                <option value="541512">541330 – Computer Systems Design Services</option>
+                                <option value="513210">541611 – Software Publishers</option>
+                                <option value="541512">336411 – Computer Systems Design Services</option>
+                                <option value="334111">332994 – Electronic Computer Manufacturing</option>
                             </select>
                         </div>
-                        <div class="col-6">
-                            <label class="form-label fw-semibold">Duration (Days)</label>
-                            <input type="number" id="f_duration" class="form-control form-control-sm" value="365" min="1">
+                        <div class="col-5">
+                            <label class="form-label fw-semibold">
+                                Market Share (%)
+                                <span class="text-muted fw-normal" title="Estimated % of the NAICS market held by this contractor">ⓘ</span>
+                            </label>
+                            <input type="number" id="f_market_share" class="form-control form-control-sm"
+                                   value="5" min="0" max="100" step="0.1"
+                                   placeholder="e.g. 5">
                         </div>
                     </div>
 
@@ -198,92 +246,147 @@
 
 <script>
 // ---------------------------------------------------------------------------
-// Agency → Sub-Agency map (drives both dashboard context and predictor form)
+// Agency → Sub-Agency map
 // ---------------------------------------------------------------------------
 const SUB_AGENCIES = {
-    "Department of Homeland Security": [
-        "U.S. Customs and Border Protection",
-        "Transportation Security Administration",
-        "Federal Emergency Management Agency",
-        "Immigration and Customs Enforcement",
-        "U.S. Coast Guard",
-        "U.S. Secret Service",
-        "Cybersecurity and Infrastructure Security Agency",
-        "Science and Technology Directorate"
+    "Commodity Futures Trading Commission": [
+        "Commodity Futures Trading Commission"
+    ],
+    "Department of Agriculture": [
+        "Office of the Chief Financial Officer",
+        "Food and Nutrition Service",
+        "Forest Service",
+        "Under Secretary for Farm and Foreign Agricultural Services",
+        "Rural Housing Service",
+        "Food Safety and Inspection Service",
+        "Agricultural Research Service",
+        "Animal and Plant Health Inspection Service",
+        "Office of the Inspector General",
+        "Farm Service Agency",
+        "Agricultural Marketing Service",
+        "Natural Resources Conservation Service"
+    ],
+    "Department of Commerce": [
+        "U.S. Census Bureau",
+        "National Oceanic and Atmospheric Administration",
+        "U.S. Patent and Trademark Office",
+        "Office of the Secretary",
+        "National Institute of Standards and Technology",
+        "Department of Commerce"
     ],
     "Department of Defense": [
-        "Department of the Army",
-        "Department of the Navy",
-        "Department of the Air Force",
-        "Defense Logistics Agency",
-        "Defense Health Agency",
-        "Defense Advanced Research Projects Agency",
-        "Missile Defense Agency",
         "Defense Information Systems Agency",
-        "Defense Contract Management Agency",
         "U.S. Special Operations Command",
-        "National Geospatial-Intelligence Agency"
-    ],
-    "Department of Health and Human Services": [
-        "Centers for Disease Control and Prevention",
-        "Centers for Medicare and Medicaid Services",
-        "Food and Drug Administration",
-        "National Institutes of Health",
-        "Health Resources and Services Administration",
-        "Indian Health Service",
-        "Substance Abuse and Mental Health Services Administration",
-        "Office of the Assistant Secretary for Preparedness and Response"
-    ],
-    "Department of Veterans Affairs": [
-        "Veterans Health Administration",
-        "Veterans Benefits Administration",
-        "National Cemetery Administration",
-        "Office of Information and Technology"
+        "Department of the Air Force",
+        "Department of the Navy",
+        "Defense Health Agency",
+        "Department of the Army",
+        "Defense Logistics Agency",
+        "Missile Defense Agency",
+        "USTRANSCOM",
+        "Department of Defense Education Activity",
+        "Defense Advanced Research Projects Agency",
+        "Washington Headquarters Services",
+        "Defense Media Activity",
+        "Defense Threat Reduction Agency",
+        "U.S. Cyber Command",
+        "Defense Counterintelligence and Security Agency",
+        "Defense Finance and Accounting Service",
+        "Defense Human Resources Activity",
+        "Defense Commissary Agency",
+        "Defense Contract Management Agency",
+        "Defense Microelectronics Activity",
+        "Uniformed Services University of the Health Sciences",
+        "Immediate Office of the Secretary of Defense",
+        "Office of the Inspector General"
     ],
     "Department of Energy": [
-        "National Nuclear Security Administration",
-        "Office of Environmental Management",
-        "Office of Science",
-        "Energy Information Administration",
-        "Office of Electricity"
+        "Federal Energy Regulatory Commission",
+        "Department of Energy"
+    ],
+    "Department of Health and Human Services": [
+        "Centers for Medicare and Medicaid Services",
+        "Centers for Disease Control and Prevention",
+        "National Institutes of Health",
+        "Office of the Assistant Secretary for Administration",
+        "Food and Drug Administration",
+        "Agency for Healthcare Research and Quality",
+        "Indian Health Service",
+        "Health Resources and Services Administration",
+        "Office of the Inspector General",
+        "Substance Abuse and Mental Health Services Administration",
+        "Office of Assistant Secretary for Preparedness and Response",
+        "Administration for Children and Families",
+        "Office of the Assistant Secretary for Financial Resources"
+    ],
+    "Department of Homeland Security": [
+        "Federal Emergency Management Agency",
+        "Transportation Security Administration",
+        "U.S. Customs and Border Protection",
+        "U.S. Citizenship and Immigration Services",
+        "U.S. Immigration and Customs Enforcement",
+        "Office of Procurement Operations",
+        "U.S. Coast Guard",
+        "U.S. Secret Service",
+        "Federal Law Enforcement Training Center",
+        "Office of the Inspector General"
     ],
     "Department of Justice": [
+        "Offices, Boards and Divisions",
+        "Bureau of Alcohol, Tobacco, Firearms and Explosives Acquisition and Property Management Division",
         "Federal Bureau of Investigation",
         "Drug Enforcement Administration",
-        "Bureau of Prisons",
-        "Bureau of Alcohol, Tobacco, Firearms and Explosives",
+        "Federal Prison System / Bureau of Prisons",
+        "Office of Justice Programs",
         "U.S. Marshals Service",
-        "Executive Office for Immigration Review"
+        "Federal Prison Industries / Unicor",
+        "Office of the Inspector General"
+    ],
+    "Department of State": [
+        "Department of State",
+        "International Boundary and Water Commission: U.S.-Mexico"
     ],
     "Department of Transportation": [
+        "Federal Motor Carrier Safety Administration",
         "Federal Aviation Administration",
-        "Federal Highway Administration",
-        "Federal Railroad Administration",
+        "Immediate Office of the Secretary of Transportation",
         "Federal Transit Administration",
+        "Federal Highway Administration",
+        "Pipeline and Hazardous Materials Safety Administration",
         "National Highway Traffic Safety Administration",
-        "Pipeline and Hazardous Materials Safety Administration"
+        "Federal Railroad Administration",
+        "Maritime Administration",
+        "Saint Lawrence Seaway Development Corporation"
     ],
-    "General Services Administration": [
-        "Federal Acquisition Service",
-        "Public Buildings Service",
-        "Office of Government-wide Policy",
-        "Technology Transformation Services"
+    "Department of the Interior": [
+        "Departmental Offices",
+        "Bureau of Safety and Environmental Enforcement",
+        "National Park Service",
+        "Bureau of Land Management",
+        "Bureau of Indian Affairs and Bureau of Indian Education",
+        "U.S. Geological Survey",
+        "U.S. Fish and Wildlife Service",
+        "Bureau of Reclamation",
+        "Bureau of Ocean Energy Management",
+        "Office of Surface Mining, Reclamation and Enforcement",
+        "Office of the Inspector General"
     ],
-    "National Aeronautics and Space Administration": [
-        "NASA Headquarters",
-        "Goddard Space Flight Center",
-        "Johnson Space Center",
-        "Kennedy Space Center",
-        "Marshall Space Flight Center",
-        "Jet Propulsion Laboratory",
-        "Langley Research Center",
-        "Ames Research Center"
+    "Department of the Treasury": [
+        "Internal Revenue Service",
+        "Bureau of the Fiscal Service",
+        "Office of the Comptroller of the Currency",
+        "United States Mint",
+        "Bureau of Engraving and Printing",
+        "Departmental Offices",
+        "Office of Inspector General"
+    ],
+    "Securities and Exchange Commission": [
+        "Securities and Exchange Commission"
     ]
 };
 
 const ALL_AGENCIES = Object.keys(SUB_AGENCIES);
 
-// Populate an <select> element with an array of string options
 function fillSelect(selectId, options, selected) {
     const el = document.getElementById(selectId);
     el.innerHTML = options.map(o =>
@@ -291,7 +394,6 @@ function fillSelect(selectId, options, selected) {
     ).join('');
 }
 
-// Populate parent agency dropdowns
 function initAgencyDropdowns() {
     fillSelect('f_award_agency', ALL_AGENCIES, ALL_AGENCIES[0]);
     fillSelect('f_fund_agency',  ALL_AGENCIES, ALL_AGENCIES[0]);
@@ -299,7 +401,6 @@ function initAgencyDropdowns() {
     syncSubAgencies('fund');
 }
 
-// Re-populate the sub-agency dropdown whenever the parent agency changes
 function syncSubAgencies(type) {
     const parentId = type === 'award' ? 'f_award_agency' : 'f_fund_agency';
     const childId  = type === 'award' ? 'f_award_sub'    : 'f_fund_sub';
@@ -354,7 +455,8 @@ async function updateDashboard() {
         Plotly.react('timeChart',       data.time_chart.data,       data.time_chart.layout);
 
         const ts = new Date().toLocaleTimeString();
-        status.innerHTML = `<span class="text-success">✓ Data refreshed for <strong>${agency}</strong> &nbsp;·&nbsp; ${start} → ${end} &nbsp;·&nbsp; Last updated: ${ts}</span>`;
+        const source = data.from_cache ? 'cache' : 'live API';
+        status.innerHTML = `<span class="text-success">✓ Data loaded from <strong>${source}</strong> for <strong>${agency}</strong> &nbsp;·&nbsp; ${start} → ${end} &nbsp;·&nbsp; ${ts}</span>`;
 
         loadRisk();
     } catch(e) {
@@ -379,6 +481,8 @@ async function loadRisk() {
 
 // ---------------------------------------------------------------------------
 // Award Value Predictor
+// Duration field removed — the model uses a fixed default internally.
+// market_share is now a user-provided input.
 // ---------------------------------------------------------------------------
 async function runInference() {
     const btn = document.getElementById('predictBtn');
@@ -393,7 +497,7 @@ async function runInference() {
         'Place of Performance Country Code':    document.getElementById('f_country').value,
         'Place of Performance State Code':      document.getElementById('f_state').value,
         'naics_code':                           document.getElementById('f_naics').value,
-        'duration':                             document.getElementById('f_duration').value,
+        'market_share':                         parseFloat(document.getElementById('f_market_share').value) || 0,
         'Description':                          document.getElementById('f_desc').value,
     };
 
@@ -410,22 +514,16 @@ async function runInference() {
         document.getElementById('res').classList.remove('d-none');
         document.getElementById('resAmt').innerText =
             '$' + parseFloat(data.amount).toLocaleString('en-US', {maximumFractionDigits: 0});
-        
-        // 1. Set the text label
+
         document.getElementById('resRisk').innerText = data.risk_label + ' Risk';
-        
-        // 2. Define the color mapping lookup object
+
         const riskColors = {
-            'Very High': 'text-danger',   // Red
-            'High':      'text-warning',  // Orange/Amber
-            'Medium':    'text-info',     // Cyan/Yellow-adjacent
-            'Low':       'text-success'   // Green
+            'Very High': 'text-danger',
+            'High':      'text-warning',
+            'Medium':    'text-info',
+            'Low':       'text-success'
         };
-
-        // 3. Get the matching class, defaulting to secondary gray if not found
         const colorClass = riskColors[data.risk_label] || 'text-secondary';
-
-        // 4. Update the element's className safely
         document.getElementById('resRisk').className = 'fw-bold ' + colorClass;
 
     } catch(e) {
@@ -440,6 +538,10 @@ async function runInference() {
 // Init
 // ---------------------------------------------------------------------------
 window.onload = function() {
+    // Always set end date to today so the dashboard reflects the current date
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('end').value = today;
+
     initAgencyDropdowns();
     updateDashboard();
 };

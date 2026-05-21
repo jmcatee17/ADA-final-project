@@ -22,8 +22,9 @@ class ContractInference:
         processed_df = self.engineer.prepare_for_inference(df)
 
         # Regression: predicted contract value
+        print(data_dict)
         y_pred_log = float(self.amount_model.predict(processed_df)[0])
-        pred_amount = np.expm1(y_pred_log)
+        pred_amount = int(np.expm1(y_pred_log))
 
         # Classification: modification risk probability
         risk_prob = float(self.risk_model.predict_proba(processed_df)[0][1])
