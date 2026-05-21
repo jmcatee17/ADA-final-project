@@ -164,43 +164,81 @@ def market_data():
     end_dt   = pd.Timestamp(end_date)
 
     # ------------------------------------------------------------------
-    # 1. Cache-first: return cached rows if we already have them
+    # 1. Cache-first: serve cached rows + identify date gaps to fetch
     # ------------------------------------------------------------------
-    df         = pd.DataFrame()
-    from_cache = False
+    df           = pd.DataFrame()
+    from_cache   = False
+    fetch_ranges = []  # list of (fetch_start_str, fetch_end_str) gaps to pull from API
 
     if os.path.exists(CACHE_PATH):
         try:
-            cached = _load_and_prepare_cache()
-            cached = cached.dropna(subset=["Start Date"])
+            cached = _load_and_prepare_cache().dropna(subset=["Start Date"])
 
-            date_mask = (cached["Start Date"] >= start_dt) & (cached["Start Date"] <= end_dt)
+            agency_cached = (
+                cached[cached["Awarding Agency"].isin(target_agencies)]
+                if "Awarding Agency" in cached.columns
+                else cached
+            )
 
-            if "Awarding Agency" in cached.columns:
-                agency_mask = cached["Awarding Agency"].isin(target_agencies)
-                hit = cached[date_mask & agency_mask]
+            if not agency_cached.empty:
+                cached_min = agency_cached["Start Date"].min()
+                cached_max = agency_cached["Start Date"].max()
+
+                # Serve whatever is already cached within the requested window
+                hit = agency_cached[
+                    (agency_cached["Start Date"] >= start_dt) &
+                    (agency_cached["Start Date"] <= end_dt)
+                ]
+                if not hit.empty:
+                    df         = hit.copy()
+                    from_cache = True
+
+                # Identify gaps not yet covered by the cache
+                if end_dt > cached_max:
+                    # Need newer data: from day after cached max → requested end
+                    gap_start = (cached_max + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                    fetch_ranges.append((gap_start, end_date))
+                if start_dt < cached_min:
+                    # Need older data: from requested start → day before cached min
+                    gap_end = (cached_min - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                    fetch_ranges.append((start_date, gap_end))
+                # If start_dt >= cached_min and end_dt <= cached_max: fully covered
             else:
-                hit = cached[date_mask]
-
-            if not hit.empty:
-                df         = hit.copy()
-                from_cache = True
+                # No cached data for this agency at all
+                fetch_ranges.append((start_date, end_date))
 
         except Exception as e:
             print(f"Cache read error: {e}")
+            fetch_ranges.append((start_date, end_date))
+    else:
+        fetch_ranges.append((start_date, end_date))
 
     # ------------------------------------------------------------------
-    # 2. Fetch from API only on cache miss; persist new rows
+    # 2. Fetch only the missing date ranges; persist and merge with cache hit
     # ------------------------------------------------------------------
-    if df.empty:
-        raw = usa_api.scrape_contracts(start_date, end_date, target_agencies)
-        df  = clean_data(raw)
+    for fetch_start, fetch_end in fetch_ranges:
+        raw    = usa_api.scrape_contracts(fetch_start, fetch_end, target_agencies)
+        new_df = clean_data(raw)
 
-        if not df.empty:
-            mask = (df["Start Date"] >= start_dt) & (df["Start Date"] <= end_dt)
-            df   = df[mask]
-            if not df.empty:
-                _append_to_cache(df)
+        if not new_df.empty:
+            fs_dt  = pd.Timestamp(fetch_start)
+            fe_dt  = pd.Timestamp(fetch_end)
+            new_df = new_df[(new_df["Start Date"] >= fs_dt) & (new_df["Start Date"] <= fe_dt)]
+
+            if not new_df.empty:
+                _append_to_cache(new_df)
+
+                # Include any portion that falls within the requested display window
+                portion = new_df[
+                    (new_df["Start Date"] >= start_dt) &
+                    (new_df["Start Date"] <= end_dt)
+                ]
+                if not portion.empty:
+                    df = (
+                        pd.concat([df, portion], ignore_index=True)
+                        if not df.empty else portion.copy()
+                    )
+                    from_cache = False
 
     if df.empty:
         return jsonify({"error": "No data returned for this selection."}), 404
@@ -364,14 +402,12 @@ def predict_mod_risk():
 
     df_c = df_c.dropna(subset=["Start Date"])
 
-    current_date = pd.Timestamp.now().floor("D")
-    one_year     = pd.Timedelta(days=365)
-    
-    # 1. Grab ALL recent data, without .head(20)
-    df = df_c[df_c["Start Date"] >= current_date - one_year].copy()
+    if df_c.empty:
+        return jsonify({"error": "Cache is empty. Click 'Sync & Analyze' first."}), 400
 
-    if df.empty:
-        return jsonify({"error": "Not enough recent data in cache."}), 400
+    # Use the most-recent 500 contracts regardless of age so that older
+    # bulk-ingest batches are still included when recent data is sparse.
+    df = df_c.sort_values("Start Date", ascending=False).head(500).copy()
 
     # 2. Run predictions on the full dataset
     processed = predictor.engineer.prepare_for_inference(df)
