@@ -44,7 +44,7 @@
             </div>
             <div class="col-md-2">
                 <label class="form-label fw-semibold">Start Date</label>
-                <input type="date" id="start" class="form-control" value="2023-10-01" onchange="updateDashboard()">
+                <input type="date" id="start" class="form-control" value="2023-10-01" min="2023-10-01" onchange="updateDashboard()">
             </div>
             <div class="col-md-2">
                 <label class="form-label fw-semibold">End Date</label>
@@ -68,8 +68,8 @@
 
     <!-- Charts row 1 -->
     <div class="row">
-        <div class="col-md-8"><div class="card p-2"><div id="pscChart"></div></div></div>
-        <div class="col-md-4"><div class="card p-2"><div id="distChart"></div></div></div>
+        <div class="col-md-6"><div class="card p-2"><div id="pscChart"></div></div></div>
+        <div class="col-md-6"><div class="card p-2"><div id="distChart"></div></div></div>
     </div>
 
     <!-- Charts row 2 -->
@@ -239,6 +239,15 @@
             <div class="card h-100">
                 <div class="card-header bg-dark text-white fw-bold">Modification Risk Batch Analysis</div>
                 <div class="card-body"><div id="riskBar" style="height:430px;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-2">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white fw-bold">Modification Predictions by NAICS Code</div>
+                <div class="card-body"><div id="naicsChart" style="height:400px;"></div></div>
             </div>
         </div>
     </div>
@@ -424,23 +433,39 @@ async function updateDashboard() {
     const start  = document.getElementById('start').value;
     const end    = document.getElementById('end').value;
 
-    btn.disabled    = true;
-    btn.innerText   = 'Loading…';
-    status.innerHTML = `<span class="text-warning">⏳ Fetching contracts for <strong>${agency}</strong> from ${start} to ${end}…</span>`;
+    btn.disabled = true;
     document.getElementById('loading').style.display = 'block';
 
-    const payload = {
-        agencies:   [agency],
-        start_date: start,
-        end_date:   end,
-        naics:      document.getElementById('naics').value
-    };
-
     try {
+        // ── Step 1: sync cache (no-op if already updated today) ──────────
+        btn.innerText = 'Syncing…';
+        status.innerHTML = `<span class="text-warning">⏳ Checking for new contract data across all agencies…</span>`;
+
+        const syncRes  = await fetch('/api/sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({})
+        });
+        const syncData = await syncRes.json();
+
+        if (syncData.status === 'updated' && syncData.new_records > 0) {
+            status.innerHTML = `<span class="text-info">✓ Cache updated (+${syncData.new_records} new contracts). Loading charts…</span>`;
+        } else {
+            status.innerHTML = `<span class="text-warning">⏳ Cache current as of <strong>${syncData.last_updated}</strong>. Loading charts…</span>`;
+        }
+
+        // ── Step 2: load charts from cache ───────────────────────────────
+        btn.innerText = 'Loading…';
+
         const res  = await fetch('/api/market-data', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
+            body: JSON.stringify({
+                agencies:   [agency],
+                start_date: start,
+                end_date:   end,
+                naics:      document.getElementById('naics').value
+            })
         });
         const data = await res.json();
 
@@ -455,12 +480,11 @@ async function updateDashboard() {
         Plotly.react('timeChart',       data.time_chart.data,       data.time_chart.layout);
 
         const ts = new Date().toLocaleTimeString();
-        const source = data.from_cache ? 'cache' : 'live API';
-        status.innerHTML = `<span class="text-success">✓ Data loaded from <strong>${source}</strong> for <strong>${agency}</strong> &nbsp;·&nbsp; ${start} → ${end} &nbsp;·&nbsp; ${ts}</span>`;
+        status.innerHTML = `<span class="text-success">✓ <strong>${agency}</strong> &nbsp;·&nbsp; ${start} → ${end} &nbsp;·&nbsp; Last sync: <strong>${syncData.last_updated}</strong> &nbsp;·&nbsp; ${ts}</span>`;
 
         loadRisk();
     } catch(e) {
-        status.innerHTML = `<span class="text-danger">⚠️ Network error: ${e}</span>`;
+        status.innerHTML = `<span class="text-danger">⚠️ Error: ${e}</span>`;
     } finally {
         btn.disabled  = false;
         btn.innerText = 'Sync & Analyze';
@@ -476,7 +500,8 @@ async function loadRisk() {
         body: JSON.stringify({})
     });
     const data = await res.json();
-    if (data.risk_bar) Plotly.react('riskBar', data.risk_bar.data, data.risk_bar.layout);
+    if (data.risk_bar)   Plotly.react('riskBar',    data.risk_bar.data,    data.risk_bar.layout);
+    if (data.naics_chart) Plotly.react('naicsChart', data.naics_chart.data, data.naics_chart.layout);
 }
 
 // ---------------------------------------------------------------------------

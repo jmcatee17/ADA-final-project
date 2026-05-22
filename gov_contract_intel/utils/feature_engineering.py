@@ -75,7 +75,7 @@ class ContractFeatureEngineer:
         # 3. Date-derived: start_year, is_democrat, duration_days
         # ------------------------------------------------------------------
         if "Start Date" in df.columns:
-            start = pd.to_datetime(df["Start Date"], errors="coerce")
+            start = pd.to_datetime(df["Start Date"], format="mixed", errors="coerce")
         else:
             start = pd.Series([pd.Timestamp.now()] * len(df), index=df.index)
 
@@ -85,7 +85,7 @@ class ContractFeatureEngineer:
         if "duration" in df.columns:
             df["duration_days"] = pd.to_numeric(df["duration"], errors="coerce").fillna(365)
         elif "End Date" in df.columns:
-            end = pd.to_datetime(df["End Date"], errors="coerce")
+            end = pd.to_datetime(df["End Date"], format="mixed", errors="coerce")
             df["duration_days"] = (end - start).dt.days.fillna(365)
         else:
             df["duration_days"] = 365

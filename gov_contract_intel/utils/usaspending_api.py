@@ -32,6 +32,7 @@ class USASpendingAPI:
                 "Awarding Agency",
                 "Awarding Sub Agency",
                 "PSC",
+                "NAICS Code",
                 "Description",
             ],
             "limit": 100,
