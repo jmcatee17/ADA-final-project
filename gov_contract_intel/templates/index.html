@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GovCon Intel AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        .filter-bar-status { font-size: 0.8rem; min-height: 1.2em; }
+        .sub-select { transition: opacity 0.2s; }
+    </style>
+</head>
+<body class="bg-light">
+
+<div id="loading" class="spinner-border text-primary position-fixed top-50 start-50 translate-middle" style="z-index: 1050; display: none;"></div>
+
+<div class="hero text-center">
+    <h1>Government Contracting Intelligence Tool</h1>
+    <p>Predictive Analytics &amp; Market Landscape</p>
+</div>
+
+<div class="container-fluid mt-4 px-5">
+
+    <!-- Dashboard filter bar -->
+    <div class="card p-3 mb-3">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Target Agency</label>
+                <select id="agency" class="form-select" onchange="updateDashboard()">
+                    <option>Commodity Futures Trading Commission</option>
+                    <option>Department of Agriculture</option>
+                    <option>Department of Commerce</option>
+                    <option>Department of Defense</option>
+                    <option>Department of Energy</option>
+                    <option>Department of Health and Human Services</option>
+                    <option>Department of Homeland Security</option>
+                    <option>Department of Justice</option>
+                    <option>Department of State</option>
+                    <option>Department of Transportation</option>
+                    <option>Department of the Interior</option>
+                    <option>Department of the Treasury</option>
+                    <option>Securities and Exchange Commission</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">Start Date</label>
+                <input type="date" id="start" class="form-control" value="2023-10-01" min="2023-10-01" onchange="updateDashboard()">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label fw-semibold">End Date</label>
+                <!-- Value is set to today dynamically in window.onload -->
+                <input type="date" id="end" class="form-control" onchange="updateDashboard()">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label fw-semibold">Keyword / NAICS</label>
+                <input type="text" id="naics" class="form-control" placeholder="Optional..." onkeypress="if(event.key === 'Enter') updateDashboard()">
+            </div>
+            <div class="col-md-2">
+                <button id="syncBtn" class="btn btn-primary w-100" onclick="updateDashboard()">Sync &amp; Analyze</button>
+            </div>
+        </div>
+        <div class="row mt-2">
+            <div class="col-12">
+                <div id="filterStatus" class="filter-bar-status text-muted ps-1"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts row 1 -->
+    <div class="row">
+        <div class="col-md-6"><div class="card p-2"><div id="pscChart"></div></div></div>
+        <div class="col-md-6"><div class="card p-2"><div id="distChart"></div></div></div>
+    </div>
+
+    <!-- Charts row 2 -->
+    <div class="row">
+        <div class="col-md-6"><div class="card p-2"><div id="contractorChart"></div></div></div>
+        <div class="col-md-6"><div class="card p-2"><div id="timeChart"></div></div></div>
+    </div>
+
+    <!-- Predictors row -->
+    <div class="row mt-4 mb-5">
+
+        <!-- Award Value Predictor -->
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white fw-bold">Award Value Predictor</div>
+                <div class="card-body">
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Awarding Agency</label>
+                        <select id="f_award_agency" class="form-select form-select-sm" onchange="syncSubAgencies('award')">
+                            <!-- populated by JS -->
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Awarding Sub Agency</label>
+                        <select id="f_award_sub" class="form-select form-select-sm sub-select">
+                            <!-- populated by JS based on parent -->
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Funding Agency</label>
+                        <select id="f_fund_agency" class="form-select form-select-sm" onchange="syncSubAgencies('fund')">
+                            <!-- populated by JS -->
+                        </select>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="form-label fw-semibold">Funding Sub Agency</label>
+                        <select id="f_fund_sub" class="form-select form-select-sm sub-select">
+                            <!-- populated by JS based on parent -->
+                        </select>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">Country</label>
+                            <select id="f_country" class="form-select form-select-sm">
+                                <option value="USA">USA</option>
+                                <option value="DEU">Germany</option>
+                                <option value="JPN">Japan</option>
+                                <option value="GBR">United Kingdom</option>
+                                <option value="KOR">South Korea</option>
+                                <option value="ITA">Italy</option>
+                                <option value="AUS">Australia</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-semibold">State</label>
+                            <select id="f_state" class="form-select form-select-sm">
+                                <option value="AK">AK</option>
+                                <option value="AL">AL</option>
+                                <option value="AR">AR</option>
+                                <option value="AZ">AZ</option>
+                                <option value="CA">CA</option>
+                                <option value="CO">CO</option>
+                                <option value="CT">CT</option>
+                                <option value="DC">DC</option>
+                                <option value="DE">DE</option>
+                                <option value="FL">FL</option>
+                                <option value="GA">GA</option>
+                                <option value="HI">HI</option>
+                                <option value="IA">IA</option>
+                                <option value="ID">ID</option>
+                                <option value="IL">IL</option>
+                                <option value="IN">IN</option>
+                                <option value="KS">KS</option>
+                                <option value="KY">KY</option>
+                                <option value="LA">LA</option>
+                                <option value="MA">MA</option>
+                                <option value="MD">MD</option>
+                                <option value="ME">ME</option>
+                                <option value="MI">MI</option>
+                                <option value="MN">MN</option>
+                                <option value="MO">MO</option>
+                                <option value="MS">MS</option>
+                                <option value="MT">MT</option>
+                                <option value="NC">NC</option>
+                                <option value="ND">ND</option>
+                                <option value="NE">NE</option>
+                                <option value="NH">NH</option>
+                                <option value="NJ">NJ</option>
+                                <option value="NM">NM</option>
+                                <option value="NV">NV</option>
+                                <option value="NY">NY</option>
+                                <option value="OH">OH</option>
+                                <option value="OK">OK</option>
+                                <option value="OR">OR</option>
+                                <option value="PA">PA</option>
+                                <option value="RI">RI</option>
+                                <option value="SC">SC</option>
+                                <option value="SD">SD</option>
+                                <option value="TN">TN</option>
+                                <option value="TX">TX</option>
+                                <option value="UT">UT</option>
+                                <option value="VA">VA</option>
+                                <option value="VT">VT</option>
+                                <option value="WA">WA</option>
+                                <option value="WI">WI</option>
+                                <option value="WV">WV</option>
+                                <option value="WY">WY</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- NAICS and Market Share on same row -->
+                    <div class="row mb-2">
+                        <div class="col-7">
+                            <label class="form-label fw-semibold">NAICS Code</label>
+                            <select id="f_naics" class="form-select form-select-sm">
+                                <option value="518210">541512 – Computing Infrastructure Providers, Data Processing, Web Hosting, and Related Services</option>
+                                <option value="541511">541511 – Custom Computer Programming</option>
+                                <option value="541519">541519 – Other Computer Related Svcs</option>
+                                <option value="541512">541330 – Computer Systems Design Services</option>
+                                <option value="513210">541611 – Software Publishers</option>
+                                <option value="541512">336411 – Computer Systems Design Services</option>
+                                <option value="334111">332994 – Electronic Computer Manufacturing</option>
+                            </select>
+                        </div>
+                        <div class="col-5">
+                            <label class="form-label fw-semibold">
+                                Market Share (%)
+                                <span class="text-muted fw-normal" title="Estimated % of the NAICS market held by this contractor">ⓘ</span>
+                            </label>
+                            <input type="number" id="f_market_share" class="form-control form-control-sm"
+                                   value="5" min="0" max="100" step="0.1"
+                                   placeholder="e.g. 5">
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Contract Description</label>
+                        <textarea id="f_desc" class="form-control form-control-sm" rows="3"
+                            placeholder="Describe the scope of work...">IT support and helpdesk services for agency operations</textarea>
+                    </div>
+
+                    <button id="predictBtn" type="button" class="btn btn-success w-100 fw-bold" onclick="runInference()">
+                        Run Prediction Model
+                    </button>
+
+                    <div id="res" class="mt-3 d-none">
+                        <hr>
+                        <div class="text-center">
+                            <div class="text-muted small mb-1">Estimated Award Value</div>
+                            <h3 id="resAmt" class="text-primary fw-bold mb-2"></h3>
+                            <div class="text-muted small mb-1">Modification Risk</div>
+                            <h5 id="resRisk" class="fw-bold"></h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Risk batch chart -->
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header bg-dark text-white fw-bold">Modification Risk Batch Analysis</div>
+                <div class="card-body"><div id="riskBar" style="height:430px;"></div></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4 mt-2">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white fw-bold">Modification Predictions by NAICS Code</div>
+                <div class="card-body"><div id="naicsChart" style="height:400px;"></div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Agency → Sub-Agency map
+// ---------------------------------------------------------------------------
+const SUB_AGENCIES = {
+    "Commodity Futures Trading Commission": [
+        "Commodity Futures Trading Commission"
+    ],
+    "Department of Agriculture": [
+        "Office of the Chief Financial Officer",
+        "Food and Nutrition Service",
+        "Forest Service",
+        "Under Secretary for Farm and Foreign Agricultural Services",
+        "Rural Housing Service",
+        "Food Safety and Inspection Service",
+        "Agricultural Research Service",
+        "Animal and Plant Health Inspection Service",
+        "Office of the Inspector General",
+        "Farm Service Agency",
+        "Agricultural Marketing Service",
+        "Natural Resources Conservation Service"
+    ],
+    "Department of Commerce": [
+        "U.S. Census Bureau",
+        "National Oceanic and Atmospheric Administration",
+        "U.S. Patent and Trademark Office",
+        "Office of the Secretary",
+        "National Institute of Standards and Technology",
+        "Department of Commerce"
+    ],
+    "Department of Defense": [
+        "Defense Information Systems Agency",
+        "U.S. Special Operations Command",
+        "Department of the Air Force",
+        "Department of the Navy",
+        "Defense Health Agency",
+        "Department of the Army",
+        "Defense Logistics Agency",
+        "Missile Defense Agency",
+        "USTRANSCOM",
+        "Department of Defense Education Activity",
+        "Defense Advanced Research Projects Agency",
+        "Washington Headquarters Services",
+        "Defense Media Activity",
+        "Defense Threat Reduction Agency",
+        "U.S. Cyber Command",
+        "Defense Counterintelligence and Security Agency",
+        "Defense Finance and Accounting Service",
+        "Defense Human Resources Activity",
+        "Defense Commissary Agency",
+        "Defense Contract Management Agency",
+        "Defense Microelectronics Activity",
+        "Uniformed Services University of the Health Sciences",
+        "Immediate Office of the Secretary of Defense",
+        "Office of the Inspector General"
+    ],
+    "Department of Energy": [
+        "Federal Energy Regulatory Commission",
+        "Department of Energy"
+    ],
+    "Department of Health and Human Services": [
+        "Centers for Medicare and Medicaid Services",
+        "Centers for Disease Control and Prevention",
+        "National Institutes of Health",
+        "Office of the Assistant Secretary for Administration",
+        "Food and Drug Administration",
+        "Agency for Healthcare Research and Quality",
+        "Indian Health Service",
+        "Health Resources and Services Administration",
+        "Office of the Inspector General",
+        "Substance Abuse and Mental Health Services Administration",
+        "Office of Assistant Secretary for Preparedness and Response",
+        "Administration for Children and Families",
+        "Office of the Assistant Secretary for Financial Resources"
+    ],
+    "Department of Homeland Security": [
+        "Federal Emergency Management Agency",
+        "Transportation Security Administration",
+        "U.S. Customs and Border Protection",
+        "U.S. Citizenship and Immigration Services",
+        "U.S. Immigration and Customs Enforcement",
+        "Office of Procurement Operations",
+        "U.S. Coast Guard",
+        "U.S. Secret Service",
+        "Federal Law Enforcement Training Center",
+        "Office of the Inspector General"
+    ],
+    "Department of Justice": [
+        "Offices, Boards and Divisions",
+        "Bureau of Alcohol, Tobacco, Firearms and Explosives Acquisition and Property Management Division",
+        "Federal Bureau of Investigation",
+        "Drug Enforcement Administration",
+        "Federal Prison System / Bureau of Prisons",
+        "Office of Justice Programs",
+        "U.S. Marshals Service",
+        "Federal Prison Industries / Unicor",
+        "Office of the Inspector General"
+    ],
+    "Department of State": [
+        "Department of State",
+        "International Boundary and Water Commission: U.S.-Mexico"
+    ],
+    "Department of Transportation": [
+        "Federal Motor Carrier Safety Administration",
+        "Federal Aviation Administration",
+        "Immediate Office of the Secretary of Transportation",
+        "Federal Transit Administration",
+        "Federal Highway Administration",
+        "Pipeline and Hazardous Materials Safety Administration",
+        "National Highway Traffic Safety Administration",
+        "Federal Railroad Administration",
+        "Maritime Administration",
+        "Saint Lawrence Seaway Development Corporation"
+    ],
+    "Department of the Interior": [
+        "Departmental Offices",
+        "Bureau of Safety and Environmental Enforcement",
+        "National Park Service",
+        "Bureau of Land Management",
+        "Bureau of Indian Affairs and Bureau of Indian Education",
+        "U.S. Geological Survey",
+        "U.S. Fish and Wildlife Service",
+        "Bureau of Reclamation",
+        "Bureau of Ocean Energy Management",
+        "Office of Surface Mining, Reclamation and Enforcement",
+        "Office of the Inspector General"
+    ],
+    "Department of the Treasury": [
+        "Internal Revenue Service",
+        "Bureau of the Fiscal Service",
+        "Office of the Comptroller of the Currency",
+        "United States Mint",
+        "Bureau of Engraving and Printing",
+        "Departmental Offices",
+        "Office of Inspector General"
+    ],
+    "Securities and Exchange Commission": [
+        "Securities and Exchange Commission"
+    ]
+};
+
+const ALL_AGENCIES = Object.keys(SUB_AGENCIES);
+
+function fillSelect(selectId, options, selected) {
+    const el = document.getElementById(selectId);
+    el.innerHTML = options.map(o =>
+        `<option value="${o}"${o === selected ? ' selected' : ''}>${o}</option>`
+    ).join('');
+}
+
+function initAgencyDropdowns() {
+    fillSelect('f_award_agency', ALL_AGENCIES, ALL_AGENCIES[0]);
+    fillSelect('f_fund_agency',  ALL_AGENCIES, ALL_AGENCIES[0]);
+    syncSubAgencies('award');
+    syncSubAgencies('fund');
+}
+
+function syncSubAgencies(type) {
+    const parentId = type === 'award' ? 'f_award_agency' : 'f_fund_agency';
+    const childId  = type === 'award' ? 'f_award_sub'    : 'f_fund_sub';
+    const parent   = document.getElementById(parentId).value;
+    const subs     = SUB_AGENCIES[parent] || ["Other"];
+    fillSelect(childId, subs, subs[0]);
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
+let dashboardInFlight = false;
+
+async function updateDashboard() {
+    if (dashboardInFlight) return;
+    dashboardInFlight = true;
+
+    const btn    = document.getElementById('syncBtn');
+    const status = document.getElementById('filterStatus');
+    const agency = document.getElementById('agency').value;
+    const start  = document.getElementById('start').value;
+    const end    = document.getElementById('end').value;
+
+    btn.disabled = true;
+    document.getElementById('loading').style.display = 'block';
+
+    try {
+        // ── Step 1: sync cache (no-op if already updated today) ──────────
+        btn.innerText = 'Syncing…';
+        status.innerHTML = `<span class="text-warning">⏳ Checking for new contract data across all agencies…</span>`;
+
+        const syncRes  = await fetch('/api/sync', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({})
+        });
+        const syncData = await syncRes.json();
+
+        if (syncData.status === 'updated' && syncData.new_records > 0) {
+            status.innerHTML = `<span class="text-info">✓ Cache updated (+${syncData.new_records} new contracts). Loading charts…</span>`;
+        } else {
+            status.innerHTML = `<span class="text-warning">⏳ Cache current as of <strong>${syncData.last_updated}</strong>. Loading charts…</span>`;
+        }
+
+        // ── Step 2: load charts from cache ───────────────────────────────
+        btn.innerText = 'Loading…';
+
+        const res  = await fetch('/api/market-data', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                agencies:   [agency],
+                start_date: start,
+                end_date:   end,
+                naics:      document.getElementById('naics').value
+            })
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            status.innerHTML = `<span class="text-danger">⚠️ ${data.error}</span>`;
+            return;
+        }
+
+        Plotly.react('pscChart',        data.psc_chart.data,        data.psc_chart.layout);
+        Plotly.react('contractorChart', data.contractor_chart.data, data.contractor_chart.layout);
+        Plotly.react('distChart',       data.dist_chart.data,       data.dist_chart.layout);
+        Plotly.react('timeChart',       data.time_chart.data,       data.time_chart.layout);
+
+        const ts = new Date().toLocaleTimeString();
+        status.innerHTML = `<span class="text-success">✓ <strong>${agency}</strong> &nbsp;·&nbsp; ${start} → ${end} &nbsp;·&nbsp; Last sync: <strong>${syncData.last_updated}</strong> &nbsp;·&nbsp; ${ts}</span>`;
+
+        loadRisk();
+    } catch(e) {
+        status.innerHTML = `<span class="text-danger">⚠️ Error: ${e}</span>`;
+    } finally {
+        btn.disabled  = false;
+        btn.innerText = 'Sync & Analyze';
+        document.getElementById('loading').style.display = 'none';
+        dashboardInFlight = false;
+    }
+}
+
+async function loadRisk() {
+    const res  = await fetch('/api/predict-mod-risk', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (data.risk_bar)   Plotly.react('riskBar',    data.risk_bar.data,    data.risk_bar.layout);
+    if (data.naics_chart) Plotly.react('naicsChart', data.naics_chart.data, data.naics_chart.layout);
+}
+
+// ---------------------------------------------------------------------------
+// Award Value Predictor
+// Duration field removed — the model uses a fixed default internally.
+// market_share is now a user-provided input.
+// ---------------------------------------------------------------------------
+async function runInference() {
+    const btn = document.getElementById('predictBtn');
+    btn.disabled  = true;
+    btn.innerText = 'Running…';
+
+    const payload = {
+        'Awarding Agency':                      document.getElementById('f_award_agency').value,
+        'Awarding Sub Agency':                  document.getElementById('f_award_sub').value,
+        'Funding Agency':                       document.getElementById('f_fund_agency').value,
+        'Funding Sub Agency':                   document.getElementById('f_fund_sub').value,
+        'Place of Performance Country Code':    document.getElementById('f_country').value,
+        'Place of Performance State Code':      document.getElementById('f_state').value,
+        'naics_code':                           document.getElementById('f_naics').value,
+        'market_share':                         parseFloat(document.getElementById('f_market_share').value) || 0,
+        'Description':                          document.getElementById('f_desc').value,
+    };
+
+    try {
+        const res  = await fetch('/api/predict-amount', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.error) { alert('Prediction error: ' + data.error); return; }
+
+        document.getElementById('res').classList.remove('d-none');
+        document.getElementById('resAmt').innerText =
+            '$' + parseFloat(data.amount).toLocaleString('en-US', {maximumFractionDigits: 0});
+
+        document.getElementById('resRisk').innerText = data.risk_label + ' Risk';
+
+        const riskColors = {
+            'Very High': 'text-danger',
+            'High':      'text-warning',
+            'Medium':    'text-info',
+            'Low':       'text-success'
+        };
+        const colorClass = riskColors[data.risk_label] || 'text-secondary';
+        document.getElementById('resRisk').className = 'fw-bold ' + colorClass;
+
+    } catch(e) {
+        alert('Prediction failed: ' + e);
+    } finally {
+        btn.disabled  = false;
+        btn.innerText = 'Run Prediction Model';
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+window.onload = function() {
+    // Always set end date to today so the dashboard reflects the current date
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('end').value = today;
+
+    initAgencyDropdowns();
+    updateDashboard();
+};
+</script>
+</body>
+</html>
