@@ -50,7 +50,7 @@ class ContractFeatureEngineer:
         df = df.copy()
 
         # ------------------------------------------------------------------
-        # 1. Description → 384-dim embeddings
+        # Description → 384-dim embeddings
         # ------------------------------------------------------------------
         descriptions = df["Description"].fillna("No description provided").tolist()
         embeddings   = self.embedder.encode(descriptions)
@@ -58,7 +58,7 @@ class ContractFeatureEngineer:
         df           = pd.concat([df, emb_df], axis=1)
 
         # ------------------------------------------------------------------
-        # 2. Award Amount
+        # Award Amount
         # ------------------------------------------------------------------
         if "Award Amount" in df.columns:
             df["Award Amount"] = (
@@ -72,7 +72,7 @@ class ContractFeatureEngineer:
             df["Award Amount"] = 0.0
 
         # ------------------------------------------------------------------
-        # 3. Date-derived: start_year, is_democrat, duration_days
+        # Date-derived: start_year, is_democrat, duration_days
         # ------------------------------------------------------------------
         if "Start Date" in df.columns:
             start = pd.to_datetime(df["Start Date"], format="mixed", errors="coerce")
@@ -91,7 +91,7 @@ class ContractFeatureEngineer:
             df["duration_days"] = 365
 
         # ------------------------------------------------------------------
-        # 4. Agency columns
+        # Agency columns
         # ------------------------------------------------------------------
         for col in ("Awarding Agency", "Awarding Sub Agency", "Funding Agency", "Funding Sub Agency"):
             if col not in df.columns:
@@ -100,7 +100,7 @@ class ContractFeatureEngineer:
                 df[col] = df[col].fillna("UNKNOWN").astype(str).str.strip()
 
         # ------------------------------------------------------------------
-        # 5. Derived boolean flags: does awarding agency differ from funding?
+        # Derived boolean flags: does awarding agency differ from funding?
         #    These were engineered during training and must be reproduced here.
         # ------------------------------------------------------------------
         df["award_not_fund_agency"] = (
@@ -112,7 +112,7 @@ class ContractFeatureEngineer:
         ).astype(int)
 
         # ------------------------------------------------------------------
-        # 6. NAICS + place of performance + market share
+        # NAICS + place of performance + market share
         # ------------------------------------------------------------------
         if "NAICS Code" in df.columns and "naics_code" not in df.columns:
             df["naics_code"] = df["NAICS Code"]
@@ -128,7 +128,7 @@ class ContractFeatureEngineer:
                 df[col] = val
 
         # ------------------------------------------------------------------
-        # 7. Guarantee every required column exists
+        # Guarantee every required column exists
         # ------------------------------------------------------------------
         numeric_defaults = {
             "start_year", "is_democrat", "duration_days",

@@ -10,7 +10,7 @@ class USASpendingAPI:
 
     def scrape_contracts(self, start_date: str, end_date: str, agencies: list) -> pd.DataFrame:
         """
-        Fetches up to 200 contract records from USASpending for the given
+        Fetches up to all contract records from USASpending for the given
         date range and awarding agency names.
         """
         naics_codes = ["518210", "541511", "541519", "541512", "513210", "511210", "541512", "334111"]

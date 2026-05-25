@@ -70,8 +70,21 @@ Optimized model saved and metrics CSV updated successfully.
 Additionally, I used XGBoost Feature Importances to look at the driving factors of the model. The most important feature is when the Department of State is either the awarding or Funding Sub-agency, which is interesting. One potential explanation is that Department of State relies on massive contracts rather than smaller multi-year vehicles.
 
 ![XGB_Regression_FI](xgb_feature_importance_regression.png)
+
+#### Dashboard:
+The rest of my focus was on building the final dashboard. This was a new experience for me, as I had not built anything with HTML or Flask before. I ideated the most with GenAI in this section of the project, particularly with Google Gemini to start. Then, I used Claude to help fix the bugs within the codebase and refine it to become more sustainable and scalable.
+
+Several highlights from this portion of the project:
+- Implemented a cache to save API and decrease dashboard latency
+- Allowed for dropdowns to create a fine-tuned ML experience for the user, based on their queries
+- Showed both descriptive and predictive statistics which have different value to the business user.
+
+Additionally, I created a virtual environment and shell script to download dependencies and run the app. This should allow any user on any machine to run the app.
+
 ### What you are happy with, from your project work so far
+I am really happy with my ability to learn and implement a full stack pipeline. Granted, I did need to use AI for help, it is cool to get a V1 project going.
+
+I think very often machine learning models are built and never used. Learning how to integrate a model into a user-facing application to make decisions, is an incredibly important skillset. It allows someone to derive value from your model, which is ultimately the goal of creating it. I am happy to learn this skill and see my results turned out well!
 
 ### What you are struggling with, or what challenges you are facing next 
-
-### Anything else you’d specifically like the course staff to focus on in giving you feedback or advice
+In the next steps I'd like to aggregate more data about the contract from a range of sources. Features I would like to add are contract duration, number of contract bidders, and more metadata about the firm that has won (such as executive compensation, average award amount last year, total headcount, etc.). I think these would add to explainability and overall performance of the XGBoost Regressor and Classifier models.
